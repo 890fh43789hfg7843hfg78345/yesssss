@@ -1,0 +1,442 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register</title>
+    <style>
+        body {
+            background-color: black;
+            color: white;
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            flex-direction: column;
+        }
+        .register-container, .subscriptions-container, .payment-container, .admin-container, .redeem-container {
+            background-color: #222;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        .subscription-box button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background-color: #555;
+            color: white;
+            cursor: pointer;
+            margin: 10px;
+        }
+        .subscription-box button:hover {
+            background-color: #777;
+        }
+        input, select {
+            display: block;
+            margin: 10px auto;
+            padding: 10px;
+            width: 200px;
+            border: none;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+        select {
+            appearance: none;
+            background: #333 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="10" height="5" viewBox="0 0 10 5"><path fill="white" d="M0 0h10L5 5z"/></svg>') no-repeat right 10px center;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            background-color: #555;
+            color: white;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background-color: #777;
+        }
+        .error {
+            color: red;
+            display: none;
+        }
+        .subscriptions-container, .admin-container, .redeem-container {
+            display: none;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+        }
+        .payment-container {
+            display: none;
+        }
+        .subscription-box {
+            background-color: #333;
+            padding: 15px;
+            margin: 10px;
+            border-radius: 4px;
+            width: 200px;
+        }
+        .hidden {
+            display: none;
+        }
+        .apology {
+            color: #aaa;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+        .key-message {
+            color: #fff;
+            font-size: 14px;
+            margin: 10px 0;
+            display: none;
+        }
+        .instructions {
+            color: #ccc;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .key-display {
+            color: #0f0;
+            word-break: break-all;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-container" id="registerContainer">
+        <h2>Register</h2>
+        <input type="text" id="username" placeholder="Username" autocomplete="off">
+        <input type="password" id="password" placeholder="Password" autocomplete="off">
+        <input type="password" id="confirmPassword" placeholder="Confirm Password" autocomplete="off">
+        <button onclick="register()">Register</button>
+        <p id="error" class="error"></p>
+        <button onclick="showRedeem()">Redeem Subscription Key</button>
+    </div>
+
+    <div class="subscriptions-container hidden" id="subscriptionsContainer">
+        <div class="subscription-box">
+            <h3>14 Days</h3>
+            <button onclick="showPayment('14 Days', 3)">Select</button>
+        </div>
+        <div class="subscription-box">
+            <h3>1 Month</h3>
+            <button onclick="showPayment('1 Month', 4)">Select</button>
+        </div>
+        <div class="subscription-box">
+            <h3>3 Months</h3>
+            <button onclick="showPayment('3 Months', 8)">Select</button>
+        </div>
+    </div>
+
+    <div class="payment-container hidden" id="paymentContainer">
+        <h2>Choose Payment Method</h2>
+        <p id="productInfo"></p>
+        <select id="paymentMethod" onchange="showPaymentMethod()">
+            <option value="" disabled selected>Select Payment Method</option>
+            <option value="TF2 Keys">TF2 Keys - <span id="keyCount"></span> Keys</option>
+        </select>
+        <p id="keyMessage" class="key-message"></p>
+        <button onclick="confirmPayment()" id="confirmButton" disabled>Confirm Payment</button>
+        <p class="apology">Sorry, we don't support card payments yet.</p>
+        <p class="instructions" id="downloadInstructions" style="display: none;">
+            Download your credentials file below and use it to log in to the Tkinter app.
+        </p>
+        <a id="downloadLink" style="display: none;" download="user_data.json">Download user_data.json</a>
+    </div>
+
+    <div class="admin-container hidden" id="adminContainer">
+        <h2>Admin Panel</h2>
+        <select id="subscriptionDuration">
+            <option value="14 Days">14 Days</option>
+            <option value="1 Month">1 Month</option>
+            <option value="3 Months">3 Months</option>
+        </select>
+        <button onclick="generateSubscriptionKey()">Generate Subscription Key</button>
+        <p id="generatedKey" class="key-display"></p>
+    </div>
+
+    <div class="redeem-container hidden" id="redeemContainer">
+        <h2>Redeem Subscription Key</h2>
+        <input type="text" id="subscriptionKey" placeholder="Enter Subscription Key">
+        <button onclick="redeemKey()">Redeem</button>
+        <p id="redeemError" class="error"></p>
+        <button onclick="showRegister()">Back to Register</button>
+    </div>
+
+    <script>
+        let currentUsername = '';
+        let selectedProduct = '';
+        let selectedKeys = 0;
+
+        // Generate UUID for subscription keys
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        // Fetch user IP address
+        async function getUserIP() {
+            try {
+                const response = await fetch('https://api.ipify.org?format=json');
+                const data = await response.json();
+                return data.ip;
+            } catch (error) {
+                console.error('Error fetching IP:', error);
+                return null;
+            }
+        }
+
+        // Check for auto-login on page load
+        window.onload = async function() {
+            const ip = await getUserIP();
+            if (ip) {
+                const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+                const user = storedUsers.find(u => u.ip === ip && u.username !== 'sylexx');
+                if (user) {
+                    currentUsername = user.username;
+                    document.getElementById('registerContainer').classList.add('hidden');
+                    if (user.subscription) {
+                        downloadCredentials(user);
+                    } else {
+                        document.getElementById('subscriptionsContainer').style.display = 'flex';
+                    }
+                }
+            }
+        };
+
+        function register() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            const error = document.getElementById('error');
+
+            error.style.display = 'none';
+            error.textContent = '';
+
+            if (!username || !password || !confirmPassword) {
+                error.style.display = 'block';
+                error.textContent = 'Please fill all fields';
+                return;
+            }
+
+            if (password !== confirmPassword) {
+                error.style.display = 'block';
+                error.textContent = 'Passwords do not match';
+                return;
+            }
+
+            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+            if (storedUsers.some(user => user.username.toLowerCase() === username.toLowerCase())) {
+                error.style.display = 'block';
+                error.textContent = 'Username already taken';
+                return;
+            }
+
+            getUserIP().then(ip => {
+                const userData = {
+                    username: username,
+                    password: btoa(password),
+                    ip: ip
+                };
+                storedUsers.push(userData);
+                localStorage.setItem('users', JSON.stringify(storedUsers));
+                currentUsername = username;
+
+                // Check if admin (sylexx)
+                if (username === 'sylexx' && password === 'sylexx') {
+                    document.getElementById('registerContainer').classList.add('hidden');
+                    document.getElementById('adminContainer').style.display = 'block';
+                } else {
+                    document.getElementById('registerContainer').classList.add('hidden');
+                    document.getElementById('subscriptionsContainer').style.display = 'flex';
+                }
+            });
+        }
+
+        function showPayment(product, keys) {
+            selectedProduct = product;
+            selectedKeys = keys;
+            document.getElementById('subscriptionsContainer').style.display = 'none';
+            document.getElementById('paymentContainer').style.display = 'block';
+            document.getElementById('productInfo').textContent = `Product: ${product}`;
+            document.getElementById('keyCount').textContent = keys;
+            document.getElementById('paymentMethod').value = '';
+            document.getElementById('keyMessage').style.display = 'none';
+            document.getElementById('confirmButton').disabled = true;
+            document.getElementById('downloadInstructions').style.display = 'none';
+            document.getElementById('downloadLink').style.display = 'none';
+        }
+
+        function showPaymentMethod() {
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const keyMessage = document.getElementById('keyMessage');
+            if (paymentMethod) {
+                document.getElementById('confirmButton').disabled = false;
+                keyMessage.style.display = 'block';
+                keyMessage.textContent = `You need to pay ${selectedKeys} TF2 Keys for ${selectedProduct}`;
+            } else {
+                document.getElementById('confirmButton').disabled = true;
+                keyMessage.style.display = 'none';
+            }
+        }
+
+        function confirmPayment() {
+            const paymentMethod = document.getElementById('paymentMethod').value;
+            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+            const user = storedUsers.find(u => u.username === currentUsername);
+            user.subscription = selectedProduct;
+            localStorage.setItem('users', JSON.stringify(storedUsers));
+            downloadCredentials(user);
+
+            const webhookUrl = 'https://discord.com/api/webhooks/1370716129517109351/q3LNc3EGYjvWBqaMgAEh23cyos-eiu6zwMHJ1QwGol_VSxka-pBsIOd4t9lwS3Wz1w1u';
+            const message = {
+                content: `User ${currentUsername} selected product: ${selectedProduct} (${selectedKeys} TF2 Keys) using payment method: ${paymentMethod}`
+            };
+
+            fetch(webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(message)
+            }).then(response => {
+                if (response.ok) {
+                    alert("Payment confirmed! Download your credentials file and use it to log in to the Tkinter app.");
+                } else {
+                    console.error('Failed to send webhook');
+                }
+            }).catch(error => {
+                console.error('Error sending webhook:', error);
+            });
+        }
+
+        function downloadCredentials(user) {
+            const userData = {
+                username: user.username,
+                password: user.password,
+                subscription: user.subscription || "No active subscription"
+            };
+            const jsonString = JSON.stringify(userData);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const downloadLink = document.getElementById('downloadLink');
+            downloadLink.href = url;
+            downloadLink.style.display = 'block';
+            document.getElementById('downloadInstructions').style.display = 'block';
+        }
+
+        function generateSubscriptionKey() {
+            const duration = document.getElementById('subscriptionDuration').value;
+            const key = generateUUID();
+            const subscriptionKeys = JSON.parse(localStorage.getItem('subscriptionKeys') || '[]');
+            subscriptionKeys.push({ key: key, duration: duration, redeemed: false });
+            localStorage.setItem('subscriptionKeys', JSON.stringify(subscriptionKeys));
+            document.getElementById('generatedKey').textContent = `Generated Key: ${key} (${duration})`;
+        }
+
+        function showRedeem() {
+            document.getElementById('registerContainer').classList.add('hidden');
+            document.getElementById('redeemContainer').style.display = 'block';
+        }
+
+        function showRegister() {
+            document.getElementById('redeemContainer').style.display = 'none';
+            document.getElementById('registerContainer').classList.remove('hidden');
+        }
+
+        function redeemKey() {
+            const key = document.getElementById('subscriptionKey').value.trim();
+            const redeemError = document.getElementById('redeemError');
+            redeemError.style.display = 'none';
+            redeemError.textContent = '';
+
+            if (!key) {
+                redeemError.style.display = 'block';
+                redeemError.textContent = 'Please enter a subscription key';
+                return;
+            }
+
+            const subscriptionKeys = JSON.parse(localStorage.getItem('subscriptionKeys') || '[]');
+            const keyData = subscriptionKeys.find(k => k.key === key);
+            if (!keyData) {
+                redeemError.style.display = 'block';
+                redeemError.textContent = 'Invalid subscription key';
+                return;
+            }
+
+            if (keyData.redeemed) {
+                redeemError.style.display = 'block';
+                redeemError.textContent = 'This key has already been redeemed';
+                return;
+            }
+
+            const storedUsers = JSON.parse(localStorage.getItem('users') || '[]');
+            const user = storedUsers.find(u => u.username === currentUsername);
+            if (!user) {
+                redeemError.style.display = 'block';
+                redeemError.textContent = 'Please register first';
+                return;
+            }
+
+            keyData.redeemed = true;
+            user.subscription = keyData.duration;
+            localStorage.setItem('users', JSON.stringify(storedUsers));
+            localStorage.setItem('subscriptionKeys', JSON.stringify(subscriptionKeys));
+            downloadCredentials(user);
+            alert(`Subscription activated: ${keyData.duration}`);
+            document.getElementById('redeemContainer').style.display = 'none';
+        }
+
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && e.key === 'I') || (e.ctrlKey && e.key === 'u')) {
+                e.preventDefault();
+            }
+        });
+    </script>
+</body>
+</html>
